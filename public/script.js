@@ -46,10 +46,67 @@ function log(message) {
   }
 }
 
-peer.on('open', (id) => {
+// Add this function to perform network checks
+async function performNetworkChecks() {
+  log('Starting network checks...');
+
+  // Check internet connectivity
+  try {
+    const response = await fetch('https://www.google.com', { mode: 'no-cors' });
+    log('Internet connectivity: OK');
+  } catch (error) {
+    log('Internet connectivity: FAILED');
+  }
+
+  // Check WebSocket connection (assumes your Socket.IO server is on the same host)
+  if (socket.connected) {
+    log('WebSocket connection: OK');
+  } else {
+    log('WebSocket connection: FAILED');
+  }
+
+  // Check STUN server reachability
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  });
+  
+  let stunReachable = false;
+  pc.onicecandidate = (event) => {
+    if (event.candidate && event.candidate.type === 'srflx') {
+      stunReachable = true;
+      log('STUN server reachability: OK');
+    }
+  };
+
+  pc.createDataChannel('test');
+  await pc.createOffer().then(offer => pc.setLocalDescription(offer));
+
+  // Wait for a short time to allow ICE gathering
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
+  if (!stunReachable) {
+    log('STUN server reachability: FAILED');
+  }
+
+  pc.close();
+
+  // Check for WebRTC support
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    log('WebRTC support: OK');
+  } else {
+    log('WebRTC support: FAILED');
+  }
+
+  log('Network checks completed.');
+}
+
+peer.on('open', async (id) => {
   log(`Connected to PeerJS with ID: ${id}`);
   peerIdDisplay.textContent = `Your Peer ID: ${id}`;
   connectionStatus.textContent = 'Connection status: Connected to signaling server';
+  
+  await performNetworkChecks();
+
   // Join a room when connected
   currentRoom = prompt("Enter room ID:");
   if (currentRoom) {
@@ -111,20 +168,43 @@ socket.on('broadcast-log', (logMessage) => {
 function handleCall(call) {
   log(`Handling call with peer: ${call.peer}`);
   connectionStatus.textContent = 'Connection status: Connecting to peer...';
+
   call.on('stream', (remoteStream) => {
     log(`Received stream from ${call.peer}`);
     remoteVideo.srcObject = remoteStream;
     connectionStatus.textContent = 'Connection status: Connected to peer';
   });
+
   call.on('close', () => {
     log(`Call with ${call.peer} has ended`);
     remoteVideo.srcObject = null;
     connectionStatus.textContent = 'Connection status: Call ended';
   });
+
   call.on('error', (error) => {
     log(`Error in call with ${call.peer}: ${error.message}`);
     connectionStatus.textContent = 'Connection status: Call error';
   });
+
+  // Log the call state changes
+  call.peerConnection.oniceconnectionstatechange = () => {
+    log(`ICE connection state with ${call.peer}: ${call.peerConnection.iceConnectionState}`);
+  };
+
+  call.peerConnection.onconnectionstatechange = () => {
+    log(`Connection state with ${call.peer}: ${call.peerConnection.connectionState}`);
+  };
+
+  call.peerConnection.onsignalingstatechange = () => {
+    log(`Signaling state with ${call.peer}: ${call.peerConnection.signalingState}`);
+  };
+
+  // Log ICE candidates
+  call.peerConnection.onicecandidate = (event) => {
+    if (event.candidate) {
+      log(`ICE candidate for ${call.peer}: ${event.candidate.candidate}`);
+    }
+  };
 }
 
 // Modify error event listeners
@@ -158,7 +238,10 @@ peer.on('icegatheringstatechange', (state) => {
 
 // Add detailed logging for connection events
 peer.on('connection', (conn) => {
-  log(`Peer connection established with: ${conn.peer}`);
+  log(`Data channel connection established with peer: ${conn.peer}`);
+  conn.on('open', () => {
+    log(`Data channel opened with peer: ${conn.peer}`);
+  });
 });
 
 socket.on('connect', () => {
