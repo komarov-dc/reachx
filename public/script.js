@@ -4,15 +4,7 @@ const peer = new Peer(undefined, {
   port: '3000',
   path: '/peerjs',
   config: {
-    'iceServers': [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun.stunprotocol.org:3478' },
-      { urls: 'stun:stun.voiparound.com' },
-      // Add a TURN server if possible
-      // { urls: 'turn:numb.viagenie.ca', username: 'your_username', credential: 'your_password' }
-    ]
+    iceServers: [] // This will be populated dynamically
   }
 });
 
@@ -43,6 +35,60 @@ function log(message) {
 }
 
 // Add this function to perform network checks
+const stunServers = [
+  'stun:stun.l.google.com:19302',
+  'stun:stun1.l.google.com:19302',
+  'stun:stun2.l.google.com:19302',
+  'stun:stun3.l.google.com:19302',
+  'stun:stun4.l.google.com:19302',
+  'stun:stun.ekiga.net',
+  'stun:stun.ideasip.com',
+  'stun:stun.rixtelecom.se',
+  'stun:stun.schlund.de',
+  'stun:stun.stunprotocol.org:3478',
+  'stun:stun.voiparound.com',
+  'stun:stun.voipbuster.com',
+  'stun:stun.voipstunt.com',
+  'stun:stun.voxgratia.org'
+];
+
+async function testStunServer(stunServer) {
+  return new Promise((resolve) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: stunServer }]
+    });
+    
+    let stunReachable = false;
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        log(`ICE candidate for ${stunServer}: ${JSON.stringify(event.candidate)}`);
+        if (event.candidate.type === 'srflx') {
+          stunReachable = true;
+          resolve(true);
+        }
+      }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      if (pc.iceGatheringState === 'complete' && !stunReachable) {
+        resolve(false);
+      }
+    };
+
+    pc.createDataChannel('test');
+    pc.createOffer()
+      .then(offer => pc.setLocalDescription(offer))
+      .catch(error => log(`Error creating offer for ${stunServer}: ${error}`));
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      if (!stunReachable) {
+        resolve(false);
+      }
+    }, 5000);
+  });
+}
+
 async function performNetworkChecks() {
   log('Starting network checks...');
 
@@ -54,37 +100,23 @@ async function performNetworkChecks() {
     log('Internet connectivity: FAILED');
   }
 
-  // Check WebSocket connection (assumes your Socket.IO server is on the same host)
+  // Check WebSocket connection
   if (socket.connected) {
     log('WebSocket connection: OK');
   } else {
     log('WebSocket connection: FAILED');
   }
 
-  // Check STUN server reachability
-  const pc = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-  });
-  
-  let stunReachable = false;
-  pc.onicecandidate = (event) => {
-    if (event.candidate && event.candidate.type === 'srflx') {
-      stunReachable = true;
-      log('STUN server reachability: OK');
+  // Test STUN servers
+  log('Testing STUN servers...');
+  for (const stunServer of stunServers) {
+    const isReachable = await testStunServer(stunServer);
+    log(`STUN server ${stunServer}: ${isReachable ? 'OK' : 'FAILED'}`);
+    if (isReachable) {
+      // Add this STUN server to the peer configuration
+      peer.options.config.iceServers.push({ urls: stunServer });
     }
-  };
-
-  pc.createDataChannel('test');
-  await pc.createOffer().then(offer => pc.setLocalDescription(offer));
-
-  // Wait for a longer time to allow ICE gathering
-  await new Promise(resolve => setTimeout(resolve, 10000)); // Increased to 10 seconds
-
-  if (!stunReachable) {
-    log('STUN server reachability: FAILED');
   }
-
-  pc.close();
 
   // Check for WebRTC support
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
