@@ -177,13 +177,17 @@ async function performNetworkChecks() {
 
   // Test STUN servers
   log('Testing STUN servers...');
+  const workingStunServers = [];
   for (const stunServer of stunServers) {
-    const isReachable = await testStunServer(stunServer);
-    log(`STUN server ${stunServer}: ${isReachable ? 'OK' : 'FAILED'}`);
-    if (isReachable) {
-      peer.options.config.iceServers.push({ urls: stunServer });
+    const isWorking = await testStunServer(stunServer);
+    log(`STUN server ${stunServer}: ${isWorking ? 'OK' : 'FAILED'}`);
+    if (isWorking) {
+      workingStunServers.push({ urls: stunServer });
     }
   }
+
+  // Update PeerJS configuration with working STUN servers
+  peer.options.config.iceServers = workingStunServers;
 
   // Test TURN servers
   log('Testing TURN servers...');
