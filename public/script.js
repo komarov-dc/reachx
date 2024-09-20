@@ -4,7 +4,22 @@ const peer = new Peer(undefined, {
   port: '3000',
   path: '/peerjs',
   config: {
-    iceServers: [] // This will be populated dynamically
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.ekiga.net' },
+      { urls: 'stun:stun.schlund.de' },
+      { urls: 'stun:stun.voipbuster.com' },
+      { urls: 'stun:stun.voipstunt.com' },
+      {
+        urls: 'turn:your-turn-server.com:3478',
+        username: 'your-username',
+        credential: 'your-password'
+      }
+    ]
   },
   debug: 3,
   reconnectTimer: 10000,
@@ -44,19 +59,9 @@ const stunServers = [
   'stun:stun3.l.google.com:19302',
   'stun:stun4.l.google.com:19302',
   'stun:stun.ekiga.net',
-  'stun:stun.ideasip.com',
-  'stun:stun.rixtelecom.se',
   'stun:stun.schlund.de',
-  'stun:stun.stunprotocol.org:3478',
-  'stun:stun.voiparound.com',
   'stun:stun.voipbuster.com',
-  'stun:stun.voipstunt.com',
-  'stun:stun.voxgratia.org',
-  // Adding some STUN servers that might be more accessible in Russia
-  'stun:stun.zadarma.com',
-  'stun:stun.sipnet.ru:3478',
-  'stun:stun.aeta.com:3478',
-  'stun:stun.telphin.com:3478'
+  'stun:stun.voipstunt.com'
 ];
 
 const turnServers = [
@@ -287,26 +292,24 @@ function handleCall(call) {
   });
 
   // Log the call state changes
-  call.peerConnection.oniceconnectionstatechange = () => {
-    log(`ICE connection state with ${call.peer}: ${call.peerConnection.iceConnectionState}`);
-  };
+  call.peerConnection.addEventListener('connectionstatechange', () => {
+    log(`Connection state changed: ${call.peerConnection.connectionState}`);
+  });
 
-  call.peerConnection.onconnectionstatechange = () => {
-    log(`Connection state with ${call.peer}: ${call.peerConnection.connectionState}`);
-  };
+  call.peerConnection.addEventListener('icegatheringstatechange', () => {
+    log(`ICE gathering state changed: ${call.peerConnection.iceGatheringState}`);
+  });
 
-  call.peerConnection.onsignalingstatechange = () => {
-    log(`Signaling state with ${call.peer}: ${call.peerConnection.signalingState}`);
-  };
-
-  // Log ICE candidates
-  call.peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      log(`ICE candidate for ${call.peer}: type=${event.candidate.type}, protocol=${event.candidate.protocol}, address=${event.candidate.address}, port=${event.candidate.port}`);
-    } else {
-      log(`ICE candidate gathering completed for ${call.peer}`);
-    }
-  };
+  // Monitor connection quality
+  setInterval(() => {
+    call.peerConnection.getStats().then(stats => {
+      stats.forEach(report => {
+        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          log(`Current RTT: ${report.currentRoundTripTime}`);
+        }
+      });
+    });
+  }, 5000);
 }
 
 // Modify error event listeners
