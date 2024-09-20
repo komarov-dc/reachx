@@ -10,6 +10,10 @@ const peer = new Peer(undefined, {
       { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.stunprotocol.org:3478' },
+      { urls: 'stun:stun.voiparound.com' },
+      // Add a TURN server if possible
+      // { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' }
     ]
   }
 });
@@ -141,6 +145,28 @@ peer.on('disconnected', () => {
 peer.on('close', () => {
   log('Connection closed');
   connectionStatus.textContent = 'Connection status: Connection closed';
+});
+
+// Add ICE connection state change and gathering state change event listeners
+peer.on('iceconnectionstatechange', (state) => {
+  log(`ICE connection state changed to: ${peer.iceConnectionState}`);
+});
+
+peer.on('icegatheringstatechange', (state) => {
+  log(`ICE gathering state changed to: ${peer.iceGatheringState}`);
+});
+
+// Add detailed logging for connection events
+peer.on('connection', (conn) => {
+  log(`Peer connection established with: ${conn.peer}`);
+});
+
+socket.on('connect', () => {
+  log('Connected to signaling server');
+});
+
+socket.on('disconnect', () => {
+  log('Disconnected from signaling server');
 });
 
 // ... rest of the existing code ...

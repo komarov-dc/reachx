@@ -21,6 +21,7 @@ io.on('connection', (socket) => {
     console.log(`User ${userId} joining room ${roomId}`);
     socket.join(roomId);
     socket.to(roomId).emit('user-connected', userId);
+    console.log(`Emitted user-connected event for ${userId} in room ${roomId}`);
 
     socket.on('disconnect', () => {
       console.log(`User ${userId} disconnected from room ${roomId}`);
