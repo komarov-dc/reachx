@@ -17,6 +17,11 @@ app.use(express.static('public'));
 io.on('connection', (socket) => {
   console.log(`New socket connection: ${socket.id}`);
 
+  // Add this event listener for client logs
+  socket.on('client-log', (message) => {
+    console.log(`Client log (${socket.id}):`, message);
+  });
+
   socket.on('join-room', (roomId, userId) => {
     console.log(`User ${userId} joining room ${roomId}`);
     socket.join(roomId);

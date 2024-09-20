@@ -8,12 +8,10 @@ const peer = new Peer(undefined, {
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
       { urls: 'stun:stun.stunprotocol.org:3478' },
       { urls: 'stun:stun.voiparound.com' },
       // Add a TURN server if possible
-      // { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' }
+      // { urls: 'turn:numb.viagenie.ca', username: 'your_username', credential: 'your_password' }
     ]
   }
 });
@@ -41,9 +39,7 @@ function log(message) {
     logElement.scrollTop = logElement.scrollHeight;
   }
   // Send log to server
-  if (currentRoom) {
-    socket.emit('log', { room: currentRoom, message: message });
-  }
+  socket.emit('client-log', message);
 }
 
 // Add this function to perform network checks
@@ -81,8 +77,8 @@ async function performNetworkChecks() {
   pc.createDataChannel('test');
   await pc.createOffer().then(offer => pc.setLocalDescription(offer));
 
-  // Wait for a short time to allow ICE gathering
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Wait for a longer time to allow ICE gathering
+  await new Promise(resolve => setTimeout(resolve, 10000)); // Increased to 10 seconds
 
   if (!stunReachable) {
     log('STUN server reachability: FAILED');
@@ -202,7 +198,9 @@ function handleCall(call) {
   // Log ICE candidates
   call.peerConnection.onicecandidate = (event) => {
     if (event.candidate) {
-      log(`ICE candidate for ${call.peer}: ${event.candidate.candidate}`);
+      log(`ICE candidate for ${call.peer}: type=${event.candidate.type}, protocol=${event.candidate.protocol}, address=${event.candidate.address}, port=${event.candidate.port}`);
+    } else {
+      log(`ICE candidate gathering completed for ${call.peer}`);
     }
   };
 }
