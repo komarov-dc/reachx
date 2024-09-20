@@ -24,14 +24,14 @@ const connectionStatus = document.getElementById('connectionStatus');
 let localStream;
 
 peer.on('open', (id) => {
-  console.log(`Connected to PeerJS with ID: ${id}`);
+  log(`Connected to PeerJS with ID: ${id}`);
   peerIdDisplay.textContent = `Your Peer ID: ${id}`;
   connectionStatus.textContent = 'Connection status: Connected to signaling server';
   // Join a room when connected
-  const roomId = prompt("Enter room ID:");
-  if (roomId) {
-    console.log(`Joining room: ${roomId}`);
-    socket.emit('join-room', roomId, id);
+  currentRoom = prompt("Enter room ID:");
+  if (currentRoom) {
+    log(`Joining room: ${currentRoom}`);
+    socket.emit('join-room', currentRoom, id);
   }
 });
 
@@ -59,50 +59,80 @@ peer.on('call', (call) => {
 });
 
 socket.on('user-connected', (userId) => {
-  console.log('User connected:', userId);
+  log('User connected: ' + userId);
   // Call the newly connected user
-  console.log(`Initiating call to newly connected user: ${userId}`);
+  log(`Initiating call to newly connected user: ${userId}`);
   const call = peer.call(userId, localStream);
   handleCall(call);
 });
 
 socket.on('user-disconnected', (userId) => {
-  console.log('User disconnected:', userId);
+  log('User disconnected: ' + userId);
   // Handle disconnection (e.g., remove video element)
 });
 
+// Add this event listener for receiving logs from other users
+socket.on('broadcast-log', (logMessage) => {
+  const logElement = document.getElementById('log');
+  if (logElement) {
+    const logEntry = document.createElement('div');
+    logEntry.textContent = `[Remote] ${logMessage}`;
+    logElement.appendChild(logEntry);
+    logElement.scrollTop = logElement.scrollHeight;
+  }
+});
+
 function handleCall(call) {
-  console.log(`Handling call with peer: ${call.peer}`);
+  log(`Handling call with peer: ${call.peer}`);
   connectionStatus.textContent = 'Connection status: Connecting to peer...';
   call.on('stream', (remoteStream) => {
-    console.log(`Received stream from ${call.peer}`);
+    log(`Received stream from ${call.peer}`);
     remoteVideo.srcObject = remoteStream;
     connectionStatus.textContent = 'Connection status: Connected to peer';
   });
   call.on('close', () => {
-    console.log(`Call with ${call.peer} has ended`);
+    log(`Call with ${call.peer} has ended`);
     // Handle call ending (e.g., remove video element)
   });
   call.on('error', (error) => {
-    console.error(`Error in call with ${call.peer}:`, error);
+    log(`Error in call with ${call.peer}: ${error.message}`);
   });
 }
 
-// Add error event listeners
+// Modify error event listeners
 peer.on('error', (error) => {
-  console.error('PeerJS error:', error);
+  log('PeerJS error: ' + error.message);
 });
 
 socket.on('connect_error', (error) => {
-  console.error('Socket.IO connection error:', error);
+  log('Socket.IO connection error: ' + error.message);
 });
 
 peer.on('disconnected', () => {
-  console.log('Disconnected from PeerJS server. Attempting to reconnect...');
+  log('Disconnected from PeerJS server. Attempting to reconnect...');
   connectionStatus.textContent = 'Connection status: Attempting to reconnect...';
   peer.reconnect();
 });
 
 peer.on('close', () => {
+  log('Connection closed');
   connectionStatus.textContent = 'Connection status: Connection closed';
 });
+
+// Add this function at the beginning of the file
+function log(message) {
+  console.log(message);
+  const logElement = document.getElementById('log');
+  if (logElement) {
+    const logEntry = document.createElement('div');
+    logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+    logElement.appendChild(logEntry);
+    logElement.scrollTop = logElement.scrollHeight;
+  }
+  // Send log to server
+  socket.emit('log', { room: currentRoom, message: message });
+}
+
+let currentRoom;
+
+// ... rest of the existing code ...

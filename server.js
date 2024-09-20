@@ -26,6 +26,11 @@ io.on('connection', (socket) => {
       console.log(`User ${userId} disconnected from room ${roomId}`);
       socket.to(roomId).emit('user-disconnected', userId);
     });
+
+    // Add this event listener for logging
+    socket.on('log', (data) => {
+      socket.to(data.room).emit('broadcast-log', data.message);
+    });
   });
 });
 
