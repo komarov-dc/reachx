@@ -34,6 +34,16 @@ io.on('connection', (socket) => {
   });
 });
 
+// Add error handling for the server
+server.on('error', (error) => {
+  console.error('Server error:', error);
+});
+
+// Add error handling for socket connections
+io.on('error', (error) => {
+  console.error('Socket.IO error:', error);
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

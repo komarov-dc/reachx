@@ -23,6 +23,25 @@ const connectionStatus = document.getElementById('connectionStatus');
 
 let localStream;
 
+// Add this at the beginning of the file
+let currentRoom;
+
+// Move the log function before it's used
+function log(message) {
+  console.log(message);
+  const logElement = document.getElementById('log');
+  if (logElement) {
+    const logEntry = document.createElement('div');
+    logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+    logElement.appendChild(logEntry);
+    logElement.scrollTop = logElement.scrollHeight;
+  }
+  // Send log to server
+  if (currentRoom) {
+    socket.emit('log', { room: currentRoom, message: message });
+  }
+}
+
 peer.on('open', (id) => {
   log(`Connected to PeerJS with ID: ${id}`);
   peerIdDisplay.textContent = `Your Peer ID: ${id}`;
@@ -35,13 +54,15 @@ peer.on('open', (id) => {
   }
 });
 
+// Add error handling for getUserMedia
 navigator.mediaDevices.getUserMedia({ video: true, audio: true })
   .then((stream) => {
-    console.log('Local media stream obtained');
+    log('Local media stream obtained');
     localStream = stream;
     localVideo.srcObject = stream;
   })
   .catch((error) => {
+    log('Error accessing media devices: ' + error.message);
     console.error('Error accessing media devices:', error);
   });
 
@@ -82,6 +103,7 @@ socket.on('broadcast-log', (logMessage) => {
   }
 });
 
+// Update the handleCall function
 function handleCall(call) {
   log(`Handling call with peer: ${call.peer}`);
   connectionStatus.textContent = 'Connection status: Connecting to peer...';
@@ -92,10 +114,12 @@ function handleCall(call) {
   });
   call.on('close', () => {
     log(`Call with ${call.peer} has ended`);
-    // Handle call ending (e.g., remove video element)
+    remoteVideo.srcObject = null;
+    connectionStatus.textContent = 'Connection status: Call ended';
   });
   call.on('error', (error) => {
     log(`Error in call with ${call.peer}: ${error.message}`);
+    connectionStatus.textContent = 'Connection status: Call error';
   });
 }
 
@@ -118,21 +142,5 @@ peer.on('close', () => {
   log('Connection closed');
   connectionStatus.textContent = 'Connection status: Connection closed';
 });
-
-// Add this function at the beginning of the file
-function log(message) {
-  console.log(message);
-  const logElement = document.getElementById('log');
-  if (logElement) {
-    const logEntry = document.createElement('div');
-    logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
-    logElement.appendChild(logEntry);
-    logElement.scrollTop = logElement.scrollHeight;
-  }
-  // Send log to server
-  socket.emit('log', { room: currentRoom, message: message });
-}
-
-let currentRoom;
 
 // ... rest of the existing code ...
