@@ -5,7 +5,9 @@ const peer = new Peer(undefined, {
   path: '/peerjs',
   config: {
     iceServers: [] // This will be populated dynamically
-  }
+  },
+  debug: 3,
+  reconnectTimer: 10000,
 });
 
 const localVideo = document.getElementById('localVideo');
@@ -49,7 +51,17 @@ const stunServers = [
   'stun:stun.voiparound.com',
   'stun:stun.voipbuster.com',
   'stun:stun.voipstunt.com',
-  'stun:stun.voxgratia.org'
+  'stun:stun.voxgratia.org',
+  // Adding some STUN servers that might be more accessible in Russia
+  'stun:stun.zadarma.com',
+  'stun:stun.sipnet.ru:3478',
+  'stun:stun.aeta.com:3478',
+  'stun:stun.telphin.com:3478'
+];
+
+const turnServers = [
+  { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' },
+  { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' }
 ];
 
 async function testStunServer(stunServer) {
@@ -89,8 +101,59 @@ async function testStunServer(stunServer) {
   });
 }
 
+async function testTurnServer(turnServer) {
+  return new Promise((resolve) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [turnServer]
+    });
+    
+    let turnReachable = false;
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        log(`ICE candidate for ${turnServer.urls}: ${JSON.stringify(event.candidate)}`);
+        if (event.candidate.type === 'relay') {
+          turnReachable = true;
+          resolve(true);
+        }
+      }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      if (pc.iceGatheringState === 'complete' && !turnReachable) {
+        resolve(false);
+      }
+    };
+
+    pc.createDataChannel('test');
+    pc.createOffer()
+      .then(offer => pc.setLocalDescription(offer))
+      .catch(error => log(`Error creating offer for ${turnServer.urls}: ${error}`));
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      if (!turnReachable) {
+        resolve(false);
+      }
+    }, 5000);
+  });
+}
+
+async function getNetworkInfo() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (connection) {
+    log(`Network type: ${connection.type}`);
+    log(`Effective network type: ${connection.effectiveType}`);
+    log(`Downlink: ${connection.downlink} Mbps`);
+    log(`Round-trip time: ${connection.rtt} ms`);
+  } else {
+    log('Network information not available');
+  }
+}
+
 async function performNetworkChecks() {
   log('Starting network checks...');
+
+  await getNetworkInfo();
 
   // Check internet connectivity
   try {
@@ -113,8 +176,17 @@ async function performNetworkChecks() {
     const isReachable = await testStunServer(stunServer);
     log(`STUN server ${stunServer}: ${isReachable ? 'OK' : 'FAILED'}`);
     if (isReachable) {
-      // Add this STUN server to the peer configuration
       peer.options.config.iceServers.push({ urls: stunServer });
+    }
+  }
+
+  // Test TURN servers
+  log('Testing TURN servers...');
+  for (const turnServer of turnServers) {
+    const isReachable = await testTurnServer(turnServer);
+    log(`TURN server ${turnServer.urls}: ${isReachable ? 'OK' : 'FAILED'}`);
+    if (isReachable) {
+      peer.options.config.iceServers.push(turnServer);
     }
   }
 
@@ -239,11 +311,13 @@ function handleCall(call) {
 
 // Modify error event listeners
 peer.on('error', (error) => {
-  log('PeerJS error: ' + error.message);
+  console.error('PeerJS error:', error);
+  log(`PeerJS error: ${error.type} - ${error.message}`);
 });
 
 socket.on('connect_error', (error) => {
-  log('Socket.IO connection error: ' + error.message);
+  console.error('Socket.IO connection error:', error);
+  log(`Socket.IO connection error: ${error.message}`);
 });
 
 peer.on('disconnected', () => {
